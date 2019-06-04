@@ -1,65 +1,90 @@
 import React from 'react';
 import ipfs from './ipfs';
-import './App.css';
+import Dashboard from './Component/Dashboard';
 
 class App extends React.Component {
   
   constructor() {
     super();
     this.state = {
-      Url: null
+      url: '',
+      fileName: '',
+      loader: false,      // this tells when to start spinner
+      showButton: false,  // this tells when to show button
+      buffer: null,
     };
-
-    this.uploadToIPFS = this.uploadToIPFS.bind(this);
   }
 
-  
-
-  uploadToIPFS() {   
-    var file = document.getElementById('input').files;
-    var reader = new window.FileReader();
-    reader.readAsArrayBuffer(file[0]);
-    setTimeout(() => {
-      var val = Buffer.from(reader.result);
-      const data = {path: file[0].name, content: val};
-      ipfs.add(data, {wrapWithDirectory: true})
-      .then((response) => { 
-        this.setState({
-          Url: "https://ipfs.io/ipfs/" + response[1].hash + "/" + file[0].name
-        });
+  // this function makes file ready for further processing
+  usercaptureFile = (inputFile) => {
+    this.state.url                         // I have eslinter installed 
+    && (                                   // so I need to follow this style and syntax everywhere
+      this.setState({
+        url: '',
+        fileName: '',
+        buffer: null,
       })
-    }, 5000);    
+    )
+    this.setState({
+      showButton: true,
+      fileName: inputFile.name,
+    });
+    let reader = new window.FileReader();
+    reader.readAsArrayBuffer(inputFile);
+    reader.onloadend = () => this.convertToBuffer(reader);
   }
-    
+
+  // this function converts file to buffer
+  convertToBuffer = async (reader) => {
+    const buffer = await Buffer.from(reader.result);
+    this.setState({buffer});
+  }                               
+  
+  // this function uploads file to ipfs
+  uploadToIPFS = async () => { 
+    this.setState({
+      loader: true,
+      showButton: false,
+    });
+    await ipfs.add(this.state.buffer, {wrapWithDirectory: true}, (err, ipfsHash) => {
+      console.log(err,ipfsHash);
+      this.setState({
+        url: "https://ipfs.io/ipfs/" + ipfsHash[1].hash + "/" + this.state.fileName,
+        loader: false,
+      });
+    })    
+  }
+  
+  //this function is like onChange event. Called when someone drop file  
+  onDrop = (acceptedFiles) => {
+    if(acceptedFiles.length === 1) {
+      console.log(acceptedFiles);
+      var inputFile = acceptedFiles[0];
+      this.usercaptureFile(inputFile);
+    }
+  }
+  
+  // this function let user make a new upload by reseting the states
+  refresh = () => {
+    this.setState({
+      url: '',
+      fileName: '',
+      buffer: null,
+    });
+  }
 
   render() {
     return (
-      <div className="App">
-        <h1>Upload files on ipfs using infura</h1>        
-        <div className="container">
-          
-          <input 
-          className="mt-5"
-          type="file"
-          id="input"/>
-          
-          <button
-          className="btn-success mt-5"
-          type="submit"
-          onClick={this.uploadToIPFS}>
-            Upload              
-          </button>
-
-          {
-            this.state.Url &&
-            <div className="alert alert-success mt-5">
-              <p className="text-center">Your file has been uploaded to IPFS. You can access it at: {'\n'}     
-                                          <a href={this.state.Url} target="blank">{this.state.Url}</a>
-              </p>
-            </div>
-          }
-
-        </div>
+      <div>
+        <Dashboard 
+          onDrop={this.onDrop}
+          showButton={this.state.showButton}
+          fileName={this.state.fileName}
+          uploadToIPFS={this.uploadToIPFS}
+          loader={this.state.loader}
+          url={this.state.url}
+          refresh={this.refresh}
+        />
       </div>
     );
   }
